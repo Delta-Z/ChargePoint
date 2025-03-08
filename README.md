@@ -56,6 +56,8 @@ For each public authorization call, a log record is written to Redis. The log re
 
 ### Without Docker
 
+1. Install Python package requirements: `pip install -r requirements.txt`.
+
 1. Configure and start the authorization server:
    ```
    export REDIS_HOST=localhost
