@@ -9,5 +9,9 @@ RUN pip install --no-cache-dir -r /requirements.txt
 
 COPY authorization_service /authorization_service/
 
-ENTRYPOINT [ "flask", "--app", "authorization_service.app", "run", "--port", "5000"]
+ENV FLASK_APP=authorization_service.app
+ENV FLASK_RUN_HOST=0.0.0.0
+ENV FLASK_PORT=5000
+
+ENTRYPOINT [ "flask", "run"]
 EXPOSE 5000

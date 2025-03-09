@@ -1,0 +1,51 @@
+name: "cp-auth"
+
+services:
+  public_api:
+    build:
+      context: .
+      dockerfile: public_api.Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - AUTHORIZATION_TIMEOUT_SEC=5
+      - BROKER_URL=amqp://rabbit
+    depends_on:
+      - authorization_worker
+  authorization_service:
+    build:
+      context: .
+      dockerfile: authorization_service.Dockerfile
+    ports:
+      - "5000:5000"
+    environment:
+      - REDIS_HOST=redis
+    depends_on:
+      - redis
+  authorization_worker:
+    build:
+      context: .
+      dockerfile: authorization_worker.Dockerfile
+    environment:
+      - AUTHORIZATION_SERVICE_URL=http://authorization_service:5000
+      - BROKER_URL=amqp://rabbit
+      - REDIS_HOST=redis
+    depends_on:
+      - redis
+      - rabbit
+      - authorization_service
+  rabbit:
+    image: "rabbitmq"
+    ports:
+      - "5672:5672"
+  redis:
+    image: "redis:alpine"
+    command: redis-server --appendonly yes --loglevel warning
+    ports:
+      - "6379:6379"
+    volumes:
+      - type: volume
+        source: db-data
+        target: /data
+volumes:
+  db-data:

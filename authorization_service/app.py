@@ -29,8 +29,8 @@ def handle_allowed(station_id: UUID, driver_token: str) -> Response:
             authorized=redis_client.sismember(_allowlist_key(station_id), driver_token)
         )
     elif request.method == "PUT":
-        new_size = redis_client.sadd(_allowlist_key(station_id), driver_token)
-        return jsonify(success=True, new_size=new_size)
+        num_added = redis_client.sadd(_allowlist_key(station_id), driver_token)
+        return jsonify(num_added=num_added)
     elif request.method == "DELETE":
-        new_size = redis_client.srem(_allowlist_key(station_id), driver_token)
-        return jsonify(success=True, new_size=new_size)
+        num_removed = redis_client.srem(_allowlist_key(station_id), driver_token)
+        return jsonify(num_removed=num_removed)
