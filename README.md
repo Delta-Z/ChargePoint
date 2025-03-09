@@ -51,31 +51,33 @@ For each public authorization call, a log record is written to Redis. The log re
    export REDIS_PORT=6379
    mkdir -p $HOME/redis && \
      docker run -v $HOME/redis:/data -p $REDIS_PORT:6379 --name cp-redis -d redis \
-     redis-server --save 60 1 --loglevel warning --bind 127.0.0.1
+     redis-server --save 60 1 --loglevel warning
    ```
 
 ### Without Docker
 
 1. Install Python package requirements: `pip install -r requirements.txt`.
 
+Note that some environment variables below are shared (in particular `AUTHORIZATION_SERVICE_PORT`).
+
 1. Configure and start the authorization server:
    ```
    export REDIS_HOST=localhost
    export AUTHORIZATION_SERVICE_PORT=5000
-   flask --app authorization_service.app run --port $AUTHORIZATION_SERVICE_PORT
+   flask --app authorization_service.app run --port $AUTHORIZATION_SERVICE_PORT &
    ```
 
 1. Configure and start the RabbitMQ worker:
    ```
    export AUTHORIZATION_SERVICE_URL=http://localhost:$AUTHORIZATION_SERVICE_PORT
-   export AUTHORIZATION_SERVICE_TIMEOUT_SEC=5
    export CALLBACK_TIMEOUT_SEC=5
-   celery -A authorization_worker.tasks worker --loglevel=INFO
+   celery -A authorization_worker.tasks worker --loglevel=INFO &
    ```
    
 1. Configure and start the public API:
    ```
-   flask --app public_api.app run --port 8080
+   export AUTHORIZATION_TIMEOUT_SEC=5
+   flask --app public_api.app run --port 8080 &
    ```
 
 ### With Docker (doesn't work)

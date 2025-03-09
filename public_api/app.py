@@ -1,5 +1,7 @@
 """Public API service which returns the acknowledgement to the user and enqueues the authorization task."""
 
+import os
+import time
 from uuid import UUID
 
 from flask import Flask, jsonify, request
@@ -13,6 +15,9 @@ CANNED_RESPONSE = {
     "status": "accepted",
     "message": "Request is being processed asynchronously. The result will be sent to the provided callback URL.",
 }
+AUTHORIZATION_TIMEOUT_NS = (
+    int(os.getenv("AUTHORIZATION_TIMEOUT_SEC", 5)) * 1_000_000_000
+)
 
 
 @app.route(
@@ -30,5 +35,10 @@ def authorize(station_id: UUID, driver_token: str):
             400,
         )
     print(f"Authorizing {driver_token} for station {station_id}")
-    authorize_task.delay(station_id, driver_token, callback_url)
+    authorize_task.delay(
+        station_id,
+        driver_token,
+        callback_url,
+        time.time_ns() + AUTHORIZATION_TIMEOUT_NS,
+    )
     return jsonify(CANNED_RESPONSE)
