@@ -2,9 +2,11 @@
 
 ## Architecture
 
-The system consists of 3 Python server nodes + RabbitMQ broker + Redis as storage. I used [Celery](https://docs.celeryq.dev/) for working with the message queue.
+The system consists of 3 Python server nodes + RabbitMQ broker + Redis / Elasticsearch as storage. I used [Celery](https://docs.celeryq.dev/) for working with the message queue.
 
-I used Redis for simplicity to store the ACLs and the response logs. In reality a more reliable and flexible storage/database might be used depending on the requirements.
+The ACLs are stored in Redis for simplicity. In reality a more reliable and flexible storage/database might be used depending on the requirements.
+
+Response logs can be stored in Elasticsearch or Redis (the former by default).
 
 The 3 server nodes are:
 
@@ -34,16 +36,52 @@ The internal authorization service runs on port 5000 and exposes the endpoint `/
 
 GET returns a JSON with a single boolean field `allowed`, the PUT and DELETE respond with the number of acls added/removed (should be 1 or 0).
 
+Example of adding ACL with `curl`:
+```
+curl -X PUT http://localhost:5000/station/123e4567-e89b-12d3-a456-426614174000/driver/validDriverToken4321/acl
+```
+
 ### Logging
 
-For each public authorization call, a log record is written to Redis. The log record key is:
+For each public authorization call, a log record is written.
+
+If `authorization_worker` sees the `ELASTICSEARCH_URL` environment variable, it will try to log to Elasticsearch. If the `REDIS_HOST` variable
+is present, it will try to log to Redis. If neither is available, logging is skipped.
+
+#### Elasticsearch
+
+The log entries are written to the `log.authorize` index. For schema, see `authorization_worker/elastic_logger.py`.
+
+#### Redis
+
+The log record key is:
 `log:authorize:<START_TIME_NS>:<STATION_UUID>:<DRIVER_TOKEN>`. It contains a Redis Hash with the response returned in the callback, the client-supplied `callback_url`, and the status received from the callback.
+
+Example of accessing the logs with Redis CLI:
+
+```
+docker run --network cp-auth_default -it --rm redis redis-cli -h cp-auth-redis-1
+```
 
 ## Running the system
 
 ### With Docker
 
 `docker compose up`
+
+#### Accessing the storage
+
+Example running Redis CLI:
+
+```
+docker run --network cp-auth_default -it --rm redis redis-cli -h cp-auth-redis-1
+```
+
+Example searching auhtorization event logs in Elastic with `curl`:
+
+```
+ curl --cacert /var/lib/docker/volumes/cp-auth_elastic-config/_data/certs/http_ca.crt -u elastic:shiboleth https://localhost:9200/log.authorize/_search
+```
 
 ### Without Docker
 
