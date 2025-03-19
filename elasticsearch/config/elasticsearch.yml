@@ -1,0 +1,5 @@
+cluster.name: cp-auth
+node.name: elastic
+path.data: /usr/share/elasticsearch/data
+discovery.type: single-node
+xpack.license.self_generated.type: basic

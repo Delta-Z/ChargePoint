@@ -1,5 +1,6 @@
-flask
 celery
+elasticsearch_dsl
+flask
 redis
 requests
 validators
