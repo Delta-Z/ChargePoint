@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1
 
-FROM python:3
+# https://github.com/elastic/elasticsearch-py/issues/2716
+FROM python:3.12-slim
 
 WORKDIR /
 

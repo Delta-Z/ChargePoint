@@ -12,6 +12,7 @@ services:
       - BROKER_URL=amqp://rabbit
     depends_on:
       - authorization_worker
+      - rabbit
   authorization_service:
     build:
       context: .
@@ -21,7 +22,8 @@ services:
     environment:
       - REDIS_HOST=redis
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
   authorization_worker:
     build:
       context: .
@@ -29,15 +31,34 @@ services:
     environment:
       - AUTHORIZATION_SERVICE_URL=http://authorization_service:5000
       - BROKER_URL=amqp://rabbit
-      - REDIS_HOST=redis
+      - ELASTICSEARCH_URL=https://elastic:9200
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - ELASTICSEARCH_CERTS_PATH=/usr/share/elasticsearch/config/certs/http_ca.crt
     depends_on:
-      - redis
-      - rabbit
-      - authorization_service
+      rabbit:
+        condition: service_healthy
+      authorization_service:
+        condition: service_started
+      elastic:
+        condition: service_healthy
+    volumes:
+      - type: volume
+        source: elastic-config
+        target: /usr/share/elasticsearch/config/certs
+        read_only: true
+        volume:
+          subpath: certs
+          nocopy: true
   rabbit:
     image: "rabbitmq"
     ports:
       - "5672:5672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
   redis:
     image: "redis:alpine"
     command: redis-server --appendonly yes --loglevel warning
@@ -45,7 +66,46 @@ services:
       - "6379:6379"
     volumes:
       - type: volume
-        source: db-data
+        source: redis-data
         target: /data
+    healthcheck:
+      test: ["CMD", "redis-cli","ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+  elastic:
+    build:
+      context: elasticsearch
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    environment:
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    group_add:
+      - 0
+    volumes:
+      - type: volume
+        source: elastic-config
+        target: /usr/share/elasticsearch/config
+      - type: volume
+        source: elastic-data
+        target: /usr/share/elasticsearch/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -s --cacert config/certs/http_ca.crt -u elastic:${ELASTIC_PASSWORD} https://localhost:9200 | grep -q 'cluster_name'",
+        ]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 12
 volumes:
-  db-data:
+  redis-data:
+  elastic-config:
+  elastic-data:

@@ -5,15 +5,19 @@ from __future__ import annotations
 import logging
 import os
 import re
+import sys
 import time
 from datetime import timedelta
 from enum import StrEnum
 from uuid import UUID
 
-import redis
 import requests
 import validators
 from celery import Celery
+
+from authorization_worker.elastic_logger import ElasticLogger
+from authorization_worker.logger import Logger
+from authorization_worker.redis_logger import RedisLogger
 
 URL = str
 VALID_DRIVER_TOKEN_REGEX = re.compile(r"[a-zA-Z0-9\-._~]{20,80}")
@@ -22,12 +26,6 @@ AUTHORIZATION_SERVICE_URL = os.getenv(
 )
 BROKER_URL = os.getenv("BROKER_URL", "amqp://localhost")
 CALLBACK_TIMEOUT_SEC = int(os.getenv("CALLBACK_TIMEOUT_SEC", 5))
-
-REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
-REDIS_PORT = os.getenv("REDIS_PORT", 6379)
-
-
-redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT)
 
 
 class Status(StrEnum):
@@ -104,6 +102,17 @@ class _AuthorizationTask:
 
 app = Celery(__name__, broker=BROKER_URL)
 
+logger = Logger()
+if sys.argv and sys.argv[0].endswith("celery") and "worker" in sys.argv:
+    if os.getenv("ELASTICSEARCH_URL"):
+        logger = ElasticLogger(
+            os.getenv("ELASTICSEARCH_URL"),
+            os.getenv("ELASTIC_PASSWORD"),
+            os.getenv("ELASTICSEARCH_CERTS_PATH", None),
+        )
+    elif os.getenv("REDIS_HOST"):
+        logger = RedisLogger(os.getenv("REDIS_HOST"), os.getenv("REDIS_PORT", 6379))
+
 
 @app.task(ignore_result=True)
 def authorize(
@@ -122,11 +131,7 @@ def authorize(
             callback_status = str(e)
     else:
         callback_status = "Invalid callback URL"
-    log_data = response | {
-        "callback_status": callback_status,
-        "callback_url": callback_url,
-    }
-    redis_client.hset(
-        f"log:authorize:{start_time_ns}:{station_id}:{driver_token}",
-        mapping=log_data,
+    logger.log_authorize(
+        start_time_ns,
+        response | {"callback_status": callback_status, "callback_url": callback_url},
     )
